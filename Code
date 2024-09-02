@@ -1,0 +1,230 @@
+from boltiotai import openai
+import os
+from flask import Flask, render_template_string, request
+
+openai.api_key = os.environ['OPENAI_API_KEY']
+
+def generate_tutorial(components):
+    response = openai.Images.create(
+        prompt=components,
+        model="dall-e-3",
+        size="1024x1024",
+        response_format="url")
+    image_url = response['data'][0]['url']
+    return image_url
+
+app = Flask(__name__)
+
+@app.route('/', methods=['GET', 'POST'])
+def hello():
+    output = ""
+
+    if request.method == 'POST':
+        components = request.form['components']
+        output = generate_tutorial(components)
+
+    return render_template_string('''
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>AI Image Generator</title>
+        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700&display=swap" rel="stylesheet">
+        <style>
+            body {
+                margin: 0;
+                font-family: 'Montserrat', sans-serif;
+                color: #f5f5f5;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                overflow: hidden;
+                position: relative;
+            }
+
+            /* Background Image Animation */
+            body::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-size: cover;
+                background-position: center;
+                z-index: -1;
+                opacity: 0.8;
+                animation: backgroundChange 20s infinite ease-in-out;
+            }
+
+            @keyframes backgroundChange {
+                0% { background-image: url('https://source.unsplash.com/featured/?nature,water'); }
+                25% { background-image: url('https://source.unsplash.com/featured/?technology,space'); }
+                50% { background-image: url('https://source.unsplash.com/featured/?art,abstract'); }
+                75% { background-image: url('https://source.unsplash.com/featured/?city,night'); }
+                100% { background-image: url('https://source.unsplash.com/featured/?nature,water'); }
+            }
+
+            .container {
+                width: 90%;
+                max-width: 900px;
+                padding: 40px;
+                text-align: center;
+                background-color: rgba(35, 35, 35, 0.85);
+                border-radius: 15px;
+                box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+            }
+
+            h1 {
+                font-weight: 700;
+                font-size: 2.5rem;
+                color: #ffffff;
+                margin-bottom: 20px;
+            }
+
+            p {
+                font-weight: 300;
+                font-size: 1.2rem;
+                color: #bbbbbb;
+                margin-bottom: 40px;
+            }
+
+            .form-control {
+                background: #2d2d2d;
+                border: 1px solid #444444;
+                padding: 15px;
+                border-radius: 10px;
+                color: #ffffff;
+                font-size: 1rem;
+                margin-bottom: 20px;
+                transition: 0.3s;
+                width: 100%;
+            }
+
+            .form-control:focus {
+                outline: none;
+                border-color: #888888;
+                background-color: #333333;
+            }
+
+            .btn-primary {
+                background-color: #6666ff;
+                border: none;
+                padding: 15px;
+                border-radius: 10px;
+                color: #ffffff;
+                font-size: 1.1rem;
+                font-weight: 700;
+                cursor: pointer;
+                transition: 0.3s;
+                width: 100%;
+            }
+
+            .btn-primary:hover {
+                background-color: #5555ee;
+            }
+
+            .card {
+                background-color: #2d2d2d;
+                border-radius: 15px;
+                padding: 20px;
+                box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
+                margin-top: 20px;
+                color: #ffffff;
+            }
+
+            .card img {
+                max-width: 100%;
+                border-radius: 15px;
+                box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            }
+
+            .card-header {
+                font-weight: 700;
+                font-size: 1.2rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+                color: #888888;
+                border-bottom: 1px solid #444444;
+                padding-bottom: 10px;
+            }
+
+            .card-body {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+
+            #myImage {
+                width: 100%;
+                height: auto;
+                border-radius: 10px;
+                margin-top: 20px;
+                transition: transform 0.3s ease-in-out;
+            }
+
+            #myImage:hover {
+                transform: scale(1.05);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>AI Image Generator</h1>
+            <p>Create stunning visuals from simple text prompts</p>
+            <form id="tutorial-form" onsubmit="event.preventDefault(); generateTutorial();">
+                <input type="text" class="form-control" id="components" name="components" placeholder="Enter a description (e.g., A futuristic cityscape)" required>
+                <button type="submit" class="btn-primary">Generate Image</button>
+            </form>
+            <div class="card">
+                <div class="card-header">
+                    <span>Output:</span>
+                    <button class="btn btn-secondary btn-sm" onclick="copyToClipboard()" style="background: #6666ff; border: none; padding: 5px 10px; border-radius: 5px;">Copy</button>
+                </div>
+                <div class="card-body">
+                    <p id="output" style="white-space: pre-wrap;"></p>
+                    <img id="myImage" src="" alt="Generated Image">
+                </div>
+            </div>
+        </div>
+        <script>
+            async function generateTutorial() {
+                const components = document.querySelector('#components').value;
+                const output = document.querySelector('#output');
+                const imgElement = document.getElementById('myImage');
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    body: new FormData(document.querySelector('#tutorial-form'))
+                });
+                const imageUrl = await response.text();
+                imgElement.src = imageUrl;
+                output.textContent = 'Generating an image for you...';
+            }
+            function copyToClipboard() {
+                const imgElement = document.getElementById('myImage');
+                const imageUrl = imgElement.src;
+                const textarea = document.createElement('textarea');
+                textarea.value = imageUrl;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                alert('Copied to clipboard');
+            }
+        </script>
+    </body>
+    </html>
+    ''',
+    output=output)
+
+@app.route('/generate', methods=['POST'])
+def generate():
+    components = request.form['components']
+    return generate_tutorial(components)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080)
